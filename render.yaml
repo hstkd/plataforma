@@ -1,0 +1,30 @@
+# Blueprint de despliegue para Render (https://render.com)
+# Uso: New + → "Blueprint" → conecta este repo → Render lee este archivo.
+#
+# Render corre la app como un único proceso Node persistente, así que el
+# store en memoria (login, progreso, reservas) se mantiene durante la sesión.
+# Ideal para una demo fiel sin base de datos todavía.
+
+services:
+  - type: web
+    name: hs-tkd-academy
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Secreto de sesión JWT: Render genera uno seguro automáticamente.
+      - key: AUTH_SECRET
+        generateValue: true
+      # Mantiene el driver de datos en modo demo (store en memoria).
+      - key: DATA_DRIVER
+        value: mock
+      # Opcional: URL pública de la app (para metadatos/OG). Complétala
+      # tras el primer deploy con la URL que te dé Render.
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false

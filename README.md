@@ -84,6 +84,39 @@ npm run dev                     # http://localhost:3000
 
 ---
 
+## ☁️ Desplegar para verla en vivo
+
+La app está lista para desplegar **sin configurar nada** (corre en modo demo con
+datos de ejemplo). Solo conviene definir `AUTH_SECRET`.
+
+> ⚠️ **Persistencia de la demo:** mientras no conectes PostgreSQL, los datos
+> viven en memoria. En **Render** (un solo proceso Node) los cambios —login,
+> progreso, reservas— se mantienen durante toda la sesión. En **Vercel**
+> (serverless) las _lecturas_ y el contenido se ven perfecto, pero las
+> _escrituras_ pueden no compartirse entre invocaciones. **Para una demo fiel,
+> recomiendo Render.** Para el deploy más rápido de Next.js, Vercel.
+
+### Opción A — Render (recomendado para demo) 🟢
+1. Entra a [render.com](https://render.com) → **New + → Blueprint**.
+2. Conecta este repositorio (rama `claude/tkd-academy-platform-sbhk49`).
+3. Render detecta `render.yaml`, genera `AUTH_SECRET` solo y despliega.
+4. Al terminar te da una URL pública `https://hs-tkd-academy.onrender.com`.
+   _(Opcional: ponla en la env var `NEXT_PUBLIC_APP_URL`.)_
+
+### Opción B — Vercel (más rápido) ▲
+1. Entra a [vercel.com/new](https://vercel.com/new) e importa este repositorio.
+2. Framework: **Next.js** (autodetectado). No cambies build ni output.
+3. En **Environment Variables** agrega `AUTH_SECRET` (genera uno con
+   `openssl rand -base64 32`).
+4. **Deploy**. Vercel te da la URL pública.
+
+Vía CLI: `npm i -g vercel && vercel` (sigue el asistente) y luego `vercel --prod`.
+
+### Cuentas para la demo desplegada
+Las mismas de arriba: `alumno@hstkd.com` / `maestro@hstkd.com`, contraseña `taekwondo`.
+
+---
+
 ## 🔌 Pasar a producción
 
 1. **Base de datos** — define `DATABASE_URL`, pon `DATA_DRIVER=prisma`,
