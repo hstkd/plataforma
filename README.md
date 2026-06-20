@@ -84,46 +84,68 @@ npm run dev                     # http://localhost:3000
 
 ---
 
-## ☁️ Desplegar para verla en vivo
+## ☁️ Desplegar en Vercel con base de datos persistente (recomendado)
 
-La app está lista para desplegar **sin configurar nada** (corre en modo demo con
-datos de ejemplo). Solo conviene definir `AUTH_SECRET`.
+La app soporta dos modos de datos vía `DATA_DRIVER`:
+- `mock` (por defecto) → store en memoria, cero configuración, datos se reinician.
+- `prisma` → **PostgreSQL real, los datos persisten** (registros, progreso, reservas…).
 
-> ⚠️ **Persistencia de la demo:** mientras no conectes PostgreSQL, los datos
-> viven en memoria. En **Render** (un solo proceso Node) los cambios —login,
-> progreso, reservas— se mantienen durante toda la sesión. En **Vercel**
-> (serverless) las _lecturas_ y el contenido se ven perfecto, pero las
-> _escrituras_ pueden no compartirse entre invocaciones. **Para una demo fiel,
-> recomiendo Render.** Para el deploy más rápido de Next.js, Vercel.
+Para una demo donde todo se guarde de verdad, usa **Vercel + Postgres** así:
 
-### Opción A — Render (recomendado para demo) 🟢
-1. Entra a [render.com](https://render.com) → **New + → Blueprint**.
-2. Conecta este repositorio (rama `claude/tkd-academy-platform-sbhk49`).
-3. Render detecta `render.yaml`, genera `AUTH_SECRET` solo y despliega.
-4. Al terminar te da una URL pública `https://hs-tkd-academy.onrender.com`.
-   _(Opcional: ponla en la env var `NEXT_PUBLIC_APP_URL`.)_
+### 1) Crea una base de datos PostgreSQL
+La forma más simple junto a Vercel es **Neon** (gratis, serverless):
+1. En [vercel.com](https://vercel.com) → tu proyecto → pestaña **Storage** → **Create
+   Database → Neon (Postgres)**. _(O crea una gratis en [neon.tech](https://neon.tech).)_
+2. Copia la **connection string** (usa la versión *pooled*, termina en `-pooler`).
 
-### Opción B — Vercel (más rápido) ▲
-1. Entra a [vercel.com/new](https://vercel.com/new) e importa este repositorio.
-2. Framework: **Next.js** (autodetectado). No cambies build ni output.
-3. En **Environment Variables** agrega `AUTH_SECRET` (genera uno con
-   `openssl rand -base64 32`).
-4. **Deploy**. Vercel te da la URL pública.
+### 2) Importa el proyecto en Vercel
+1. [vercel.com/new](https://vercel.com/new) → importa `hstkd/plataforma`.
+2. Framework **Next.js** (autodetectado). No cambies el build (la app ya define
+   un `vercel-build` que aplica el esquema y siembra datos automáticamente).
 
-Vía CLI: `npm i -g vercel && vercel` (sigue el asistente) y luego `vercel --prod`.
+### 3) Variables de entorno (en Settings → Environment Variables)
+| Name | Value |
+|------|-------|
+| `DATA_DRIVER` | `prisma` |
+| `DATABASE_URL` | _tu connection string de Neon_ `...-pooler...?sslmode=require` |
+| `AUTH_SECRET` | genera uno con `openssl rand -base64 32` |
+
+> Con Neon/PgBouncer (URL *pooled*), añade `&pgbouncer=true` al final de `DATABASE_URL`.
+
+### 4) Deploy
+Vercel ejecuta `vercel-build`, que: aplica el esquema (`prisma db push`), **siembra
+los datos demo** (cursos, planes, usuarios) y compila. En 1–2 min tendrás tu URL.
+
+> 💡 Si despliegas en la **rama** `claude/tkd-academy-platform-sbhk49`, ve a
+> **Settings → Git → Production Branch** y ponla, o fusiona a `main`.
 
 ### Cuentas para la demo desplegada
-Las mismas de arriba: `alumno@hstkd.com` / `maestro@hstkd.com`, contraseña `taekwondo`.
+`alumno@hstkd.com` / `maestro@hstkd.com`, contraseña `taekwondo`.
 
 ---
 
-## 🔌 Pasar a producción
+### Alternativa — Render (un clic, también con Postgres)
+El `render.yaml` despliega un servicio web Node. Para persistencia, crea además
+un **Render PostgreSQL**, copia su *Internal Database URL* en la env var
+`DATABASE_URL` del servicio y pon `DATA_DRIVER=prisma`.
 
-1. **Base de datos** — define `DATABASE_URL`, pon `DATA_DRIVER=prisma`,
-   ejecuta `npm run prisma:push` e implementa los repositorios contra `@prisma/client`.
-2. **Stripe** — `npm i stripe`, define `STRIPE_SECRET_KEY` y el webhook
+### Modo demo sin base de datos
+Si solo quieres verla rápido sin DB, no definas `DATABASE_URL` ni `DATA_DRIVER`:
+arranca en modo `mock` (los datos se reinician en cada despliegue).
+
+---
+
+## 🔌 Otras integraciones de producción
+
+1. **Stripe** — `npm i stripe`, define `STRIPE_SECRET_KEY` y el webhook
    (`/api/webhooks/stripe`); descomenta el bloque real en `src/lib/payments/stripe.ts`.
-3. **Zoom** — crea una app *Server-to-Server OAuth* y define
+2. **Zoom** — crea una app *Server-to-Server OAuth* y define
    `ZOOM_ACCOUNT_ID`, `ZOOM_CLIENT_ID`, `ZOOM_CLIENT_SECRET`.
+
+### Comandos útiles de base de datos
+```bash
+npm run db:push   # aplica prisma/schema.prisma a la base (DATABASE_URL)
+npm run db:seed   # carga el contenido demo (idempotente)
+```
 
 Todas las variables están documentadas en `.env.example`.
