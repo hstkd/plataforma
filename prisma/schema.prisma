@@ -1,0 +1,248 @@
+// =====================================================================
+// HS TKD Academy - OnLine — Modelo de datos canónico (PostgreSQL)
+// =====================================================================
+// Este esquema define la arquitectura "real" pensada para escalar a
+// miles de usuarios. La app corre por defecto con una capa mock en
+// `src/lib/db` que refleja exactamente estos modelos, de modo que migrar
+// a la base real es directo: define DATABASE_URL, DATA_DRIVER=prisma,
+// ejecuta `npm run prisma:push` y conecta el repositorio Prisma.
+// =====================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------
+// Usuarios y progreso
+// ---------------------------------------------------------------------
+
+enum Role {
+  STUDENT
+  ADMIN
+}
+
+enum Belt {
+  WHITE
+  YELLOW
+  GREEN
+  BLUE
+  RED
+  BLACK
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         Role     @default(STUDENT)
+  belt         Belt     @default(WHITE)
+  avatarUrl    String?
+  xp           Int      @default(0)
+  streakDays   Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  membership   Membership?
+  progress     LessonProgress[]
+  bookings     Booking[]
+  orders       Order[]
+
+  @@index([role])
+}
+
+// ---------------------------------------------------------------------
+// Biblioteca de contenido
+// ---------------------------------------------------------------------
+
+enum Category {
+  POOMSAE
+  COMBATE
+  TECNICA
+  FLEXIBILIDAD
+  FUERZA
+  VELOCIDAD
+  MENTAL
+}
+
+enum AccessType {
+  FREE          // abierto a todos
+  MEMBERSHIP    // requiere membresía activa
+  PURCHASE      // compra individual del curso
+}
+
+model Course {
+  id            String     @id @default(cuid())
+  slug          String     @unique
+  title         String
+  category      Category
+  summary       String
+  description   String
+  coverUrl      String
+  trailerUrl    String?
+  requiredBelt  Belt       @default(WHITE)
+  access        AccessType @default(MEMBERSHIP)
+  priceCents    Int        @default(0)   // para AccessType.PURCHASE
+  durationMin   Int        @default(0)
+  published     Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  lessons       Lesson[]
+  orders        Order[]
+
+  @@index([category])
+  @@index([access])
+}
+
+model Lesson {
+  id          String   @id @default(cuid())
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  order       Int
+  title       String
+  videoUrl    String
+  description String
+  durationSec Int      @default(0)
+  drills      Drill[]
+  progress    LessonProgress[]
+
+  @@unique([courseId, order])
+}
+
+model Drill {
+  id       String @id @default(cuid())
+  lessonId String
+  lesson   Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  name     String
+  reps     String // p.ej. "3 x 10" o "30 s por lado"
+  notes    String?
+}
+
+model LessonProgress {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId    String
+  lesson      Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+
+  @@unique([userId, lessonId])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------
+// Pagos: membresías, compras y clases privadas
+// ---------------------------------------------------------------------
+
+enum PlanInterval {
+  MONTH
+  YEAR
+}
+
+model Plan {
+  id            String       @id @default(cuid())
+  slug          String       @unique
+  name          String
+  priceCents    Int
+  interval      PlanInterval @default(MONTH)
+  features      String[]
+  highlighted   Boolean      @default(false)
+  stripePriceId String?
+
+  memberships   Membership[]
+}
+
+enum MembershipStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+model Membership {
+  id                   String           @id @default(cuid())
+  userId               String           @unique
+  user                 User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId               String
+  plan                 Plan             @relation(fields: [planId], references: [id])
+  status               MembershipStatus @default(ACTIVE)
+  currentPeriodEnd     DateTime
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  createdAt            DateTime         @default(now())
+}
+
+enum OrderType {
+  COURSE
+  PRIVATE_CLASS
+  MEMBERSHIP
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  REFUNDED
+  FAILED
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  userId          String
+  user            User        @relation(fields: [userId], references: [id])
+  type            OrderType
+  status          OrderStatus @default(PENDING)
+  amountCents     Int
+  currency        String      @default("usd")
+  courseId        String?
+  course          Course?     @relation(fields: [courseId], references: [id])
+  stripeSessionId String?
+  createdAt       DateTime    @default(now())
+
+  @@index([userId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------
+// Agenda: clases privadas por Zoom
+// ---------------------------------------------------------------------
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELED
+  COMPLETED
+}
+
+model AvailabilitySlot {
+  id        String   @id @default(cuid())
+  startsAt  DateTime
+  durationMin Int    @default(60)
+  capacity  Int      @default(1)
+  booked    Boolean  @default(false)
+
+  booking   Booking?
+
+  @@index([startsAt])
+}
+
+model Booking {
+  id           String        @id @default(cuid())
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  slotId       String        @unique
+  slot         AvailabilitySlot @relation(fields: [slotId], references: [id])
+  status       BookingStatus @default(PENDING)
+  focus        String        // tema de la clase
+  zoomJoinUrl  String?
+  zoomMeetingId String?
+  createdAt    DateTime      @default(now())
+
+  @@index([userId])
+  @@index([status])
+}
